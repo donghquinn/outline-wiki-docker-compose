@@ -1,0 +1,54 @@
+version: "3"
+services:
+  redis:
+    image: redis
+    container_name: outline_redis
+    restart: always
+    networks:
+      - internal
+  postgres:
+    image: postgres:13.4
+    container_name: outline_postgres
+    env_file: ./env.postgres
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+    restart: always
+    networks:
+      - internal
+  minio:
+    image: minio/minio:RELEASE.2022-03-26T06-49-28Z.hotfix.6a78a92ad
+    container_name: outline_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./data/minio:/minio_root
+      - ./data/certs:/root/.minio/certs
+    command: "minio server /minio_root --console-address \":9001\""
+    env_file: ./env.minio
+    restart: always
+    networks:
+      - proxy
+  outline:
+    image: outlinewiki/outline:latest
+    container_name: outline_host
+    command: sh -c "yarn db:migrate --env production-ssl-disabled && yarn start"
+    environment:
+      - DATABASE_URL=postgres://user:password@outline_postgres:5432/outline
+      - DATABASE_URL_TEST=postgres://user:password@outline_postgres:5432/outline-test
+      - REDIS_URL=redis://redis:6379
+    env_file: ./env.outline
+    restart: always
+    networks:
+      - internal
+      - proxy
+    depends_on:
+      - postgres
+      - redis
+      - minio
+
+networks: 
+  internal:
+  proxy:
+    external: true
+
